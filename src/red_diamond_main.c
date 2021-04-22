@@ -14,6 +14,7 @@
 
 // mutex to control HDF5 file access, total number of frames, current frame
 pthread_mutex_t hdf_mutex;
+pthread_mutex_t out_mutex;
 int n_frames;
 int frame;
 
@@ -34,6 +35,15 @@ typedef struct chunk_t {
   size_t size;
   int index;
 } chunk_t;
+
+/* print output */
+
+void result(int image, int masked) {
+  pthread_mutex_lock(&out_mutex);
+  printf("%d %d\n", image, masked);
+  pthread_mutex_unlock(&out_mutex);
+  return;
+}
 
 /* next() method will lock and read the next chunk from the file as needed */
 
@@ -103,7 +113,26 @@ void *worker(void *nonsense) {
     /* decompress chunk - which starts 12 bytes in... */
     bshuf_decompress_lz4((chunk.chunk) + 12, (void *)buffer, size, datasize, 0);
 
-    printf("Read %d %ld\n", chunk.index, chunk.size);
+    /* count masked pixels - 0xffff or 0xffffffff */
+    int masked = 0;
+
+    if (datasize == 2) {
+      unsigned short *image = (unsigned short *)buffer;
+      for (int j = 0; j < size; j++) {
+        if (image[j] == 0xffff) {
+          masked += 1;
+        }
+      }
+    } else {
+      unsigned int *image = (unsigned int *)buffer;
+      for (int j = 0; j < size; j++) {
+        if (image[j] == 0xffffffff) {
+          masked += 1;
+        }
+      }
+    }
+
+    result(chunk.index, masked);
 
     free(chunk.chunk);
   }
@@ -132,8 +161,6 @@ int main(int argc, char **argv) {
 
   // print out this VDS info
   for (int j = 0; j < data_file_count; j++) {
-    printf("%s/%s -> %ld + %ld\n", data_files[j].filename,
-           data_files[j].dsetname, data_files[j].offset, data_files[j].frames);
     data_files[j].file =
         H5Fopen(data_files[j].filename, H5F_ACC_RDONLY, H5P_DEFAULT);
     data_files[j].dataset =
@@ -159,19 +186,11 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  printf("Element size %lld bytes\n", datasize);
-
   space = H5Dget_space(dataset);
-
-  printf("N dimensions %d\n", H5Sget_simple_extent_ndims(space));
 
   H5Sget_simple_extent_dims(space, dims, NULL);
 
   dims[0] = n_frames;
-
-  for (int j = 0; j < 3; j++) {
-    printf("Dimension %d: %lld\n", j, dims[j]);
-  }
 
   /* allocate and spin up threads */
 
@@ -184,6 +203,7 @@ int main(int argc, char **argv) {
   pthread_t *threads;
 
   pthread_mutex_init(&hdf_mutex, NULL);
+  pthread_mutex_init(&out_mutex, NULL);
 
   threads = (pthread_t *)malloc(sizeof(pthread_t) * n_threads);
 
@@ -196,6 +216,7 @@ int main(int argc, char **argv) {
   }
 
   pthread_mutex_destroy(&hdf_mutex);
+  pthread_mutex_destroy(&out_mutex);
 
   H5Sclose(space);
   status = H5Pclose(plist);
