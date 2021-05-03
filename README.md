@@ -6,8 +6,14 @@ Code to evaluate how fast one may read Eiger 2XE 16M data from HDF5 files by rea
 
 Building on a Diamond system, following modules should be loaded
 
-1) cmake/3.20.0        3) intel/compilers/2021
-2) hdf5/1.10.5         4) gcc/9.2.0
+```
+1) cmake/3.20.0        
+2) hdf5/1.10.5
+3) intel/compilers/2021        
+4) gcc/9.2.0
+
+```
+
 # Building
 
 ```
