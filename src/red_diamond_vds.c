@@ -13,7 +13,7 @@ int vds_info(char *root, hid_t master, hid_t dataset, h5_data_file *vds) {
   hid_t plist, vds_source;
   size_t vds_count;
   herr_t status;
-
+  
   plist = H5Dget_create_plist(dataset);
 
   status = H5Pget_virtual_count(plist, &vds_count);
